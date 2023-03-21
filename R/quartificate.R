@@ -70,7 +70,8 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
       )
     )
   })
-  html <- xml2::read_html(out_temp_file)
+
+  html <- xml2::read_html(out_temp_file, encoding = "utf-8")
   sections <- xml2::xml_find_all(html, ".//section[@class='level1']")
   ids <- purrr::map_chr(sections, treat_section, path = path)
 
@@ -106,12 +107,18 @@ treat_section <- function(section, path) {
   id <- xml2::xml_attr(section, "id")
   lists <- xml2::xml_find_all(section, ".//li")
   fix_list <- function(list) {
-    blockquotes <- xml2::xml_find_all(list, ".//blockquote")
+    blockquotes <- xml2::xml_find_all(list, "blockquote")
     fix_blockquote <- function(blockquote) {
       parent <- xml2::xml_parent(blockquote)
       contents <- xml2::xml_contents(blockquote)
       purrr::walk(contents, ~xml2::xml_add_child(parent, .x))
       xml2::xml_remove(blockquote)
+      # TODO rm stringr dep
+      xml2::xml_add_sibling(
+        parent, "li",
+        stringr::str_squish(xml2::xml_text(parent)),
+        .where = "after")
+      xml2::xml_remove(parent)
     }
     if (length(blockquotes) > 0) {
       purrr::walk(blockquotes, fix_blockquote)
