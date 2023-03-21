@@ -114,7 +114,7 @@ treat_section <- function(section, path) {
       xml2::xml_remove(blockquote)
     }
     if (length(blockquotes) > 0) {
-    purrr::walk(blockquotes, fix_blockquote)
+      purrr::walk(blockquotes, fix_blockquote)
     }
   }
   purrr::walk(lists, fix_list)
