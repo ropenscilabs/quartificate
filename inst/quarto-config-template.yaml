@@ -1,0 +1,10 @@
+project:
+  type: book
+  output-dir: docs
+
+book:
+  title: "{{title}}"
+  author: "{{author}}"
+  date: "{{date}}"
+  chapters:
+{{{chapters}}}
