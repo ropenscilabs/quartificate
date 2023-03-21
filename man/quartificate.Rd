@@ -10,6 +10,8 @@ quartificate(gdoc_id, path, render = FALSE)
 \item{gdoc_id}{ID of the Google Document.}
 
 \item{path}{A path, where to create the Quarto book. It will be created if needed.}
+
+\item{render}{Logical. Whether to render the resulting Quarto book.}
 }
 \value{
 Nothing.

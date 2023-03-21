@@ -18,7 +18,7 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
   fs::dir_create(from_gdoc)
 
   googledrive::drive_download(
-    googledrive::as_id(id),
+    googledrive::as_id(gdoc_id),
     type = "docx",
     path = file.path(from_gdoc, "gdoc.docx")
   )
@@ -27,7 +27,7 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
 
   withr::with_dir(temp_dir, {
     googledrive::drive_download(
-      googledrive::as_id(id),
+      googledrive::as_id(gdoc_id),
       type = "application/zip"
     )
   })
@@ -98,7 +98,7 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
 
   # prepare Quarto config ----
 
-  meta <- googledrive::drive_get(googledrive::as_id(id))
+  meta <- googledrive::drive_get(googledrive::as_id(gdoc_id))
   title <- meta[["name"]]
   author <- meta[["drive_resource"]][[1]][["owners"]][[1]][["displayName"]]
   date <- as.character(Sys.Date())
