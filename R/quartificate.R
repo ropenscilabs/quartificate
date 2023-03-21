@@ -72,21 +72,7 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
   })
   html <- xml2::read_html(out_temp_file)
   sections <- xml2::xml_find_all(html, ".//section[@class='level1']")
-  treat_section <- function(section) {
-    id <- xml2::xml_attr(section, "id")
-    temp_file <- withr::local_tempfile()
-    xml2::write_html(section, temp_file)
-    md_temp_file <- withr::local_tempfile()
-    pandoc::pandoc_convert(
-      file = temp_file,
-      from = "html",
-      to = "gfm-raw_html",
-      output = md_temp_file,
-    )
-    fs::file_copy(md_temp_file, file.path(path, sprintf("%s.qmd", id)))
-    return(id)
-  }
-  ids <- purrr::map_chr(sections, treat_section)
+  ids <- purrr::map_chr(sections, treat_section, path = path)
 
   # use first part as index.qmd
   fs::file_move(
@@ -114,4 +100,33 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
       quarto::quarto_render()
     })
   }
+}
+
+treat_section <- function(section, path) {
+  id <- xml2::xml_attr(section, "id")
+  lists <- xml2::xml_find_all(section, ".//li")
+  fix_list <- function(list) {
+    blockquotes <- xml2::xml_find_all(list, ".//blockquote")
+    fix_blockquote <- function(blockquote) {
+      parent <- xml2::xml_parent(blockquote)
+      contents <- xml2::xml_contents(blockquote)
+      purrr::walk(contents, ~xml2::xml_add_child(parent, .x))
+      xml2::xml_remove(blockquote)
+    }
+    if (length(blockquotes) > 0) {
+    purrr::walk(blockquotes, fix_blockquote)
+    }
+  }
+  purrr::walk(lists, fix_list)
+  temp_file <- withr::local_tempfile()
+  xml2::write_html(section, temp_file)
+  md_temp_file <- withr::local_tempfile()
+  pandoc::pandoc_convert(
+    file = temp_file,
+    from = "html",
+    to = "gfm-raw_html",
+    output = md_temp_file,
+  )
+  fs::file_copy(md_temp_file, file.path(path, sprintf("%s.qmd", id)))
+  return(id)
 }
