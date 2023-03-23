@@ -45,6 +45,7 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
     file = file.path(from_gdoc, "gdoc.docx"),
     from = "docx",
     to = "gfm-raw_html",
+    args = "--wrap=none",
     output = file.path(path, "raw.md")
   )
 
@@ -54,6 +55,22 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
   )
 
   # TODO Fix quotes in list ----
+  lines <- brio::read_lines(file.path(path, "raw.md"))
+  lines_starts <- purrr::map_chr(lines, ~substr(trimws(.x), 1, 1))
+  for (i in seq_along(lines)[-1]) {
+    # quote right after a list item
+    if (lines_starts[i] == ">" && lines_starts[i - 1] %in% c("-", "*")) {
+      lines[i] <- sub(">", "", trimws(lines[i]))
+    }
+    if (i > 2) {
+      if (lines_starts[i] == ">" && lines_starts[i - 1] == "" && lines_starts[i - 2] %in% c("-", "*")) {
+        lines[i - 2] <- paste(lines[i - 2], sub(">", "", trimws(lines[i])))
+        lines[i] <- ""
+      }
+    }
+  }
+  browser()
+  brio::write_lines(lines, file.path(path, "raw2.md"))
   # TODO Fix "smart" quotes (punctuation signs not block like above) ----
   # convert to HTML with sections ----
   out_temp_file <- withr::local_tempfile(fileext = ".html")
