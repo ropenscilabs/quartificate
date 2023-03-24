@@ -4,7 +4,7 @@
 \alias{quartificate}
 \title{Transform Google Doc to Quarto book}
 \usage{
-quartificate(gdoc_id, path, render = FALSE)
+quartificate(gdoc_id, path, render = FALSE, fix_lists = FALSE)
 }
 \arguments{
 \item{gdoc_id}{ID of the Google Document.}
@@ -12,12 +12,22 @@ quartificate(gdoc_id, path, render = FALSE)
 \item{path}{A path, where to create the Quarto book. It will be created if needed.}
 
 \item{render}{Logical. Whether to render the resulting Quarto book.}
+
+\item{fix_lists}{Logical. Whether to try and fix lists, see Details.}
 }
 \value{
 Nothing.
 }
 \description{
 Transform Google Doc to Quarto book
+}
+\details{
+If your Google Document contains lists whose items span several lines,
+you might get better results with the \code{fix_lists} paremeter set to \code{TRUE}.
+The problem is that in Google Docs lists, from the second line lines in items
+have a small indentation. Pandoc tends to interpret this as a blockquote.
+We try to fix that by merging blockquotes in their previous sibling,
+when that previous sibling is a list item.
 }
 \examples{
 id <- googledrive::drive_find(

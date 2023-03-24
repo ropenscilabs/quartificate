@@ -16,7 +16,6 @@ Imports:
     pandoc,
     purrr,
     quarto,
-    stringr,
     whisker,
     withr,
     xml2
