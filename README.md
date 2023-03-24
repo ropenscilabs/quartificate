@@ -33,3 +33,11 @@ servr::httw(file.path("../example-doc", "docs"))
 ```
 
 I get this [Quarto book](https://sprightly-conkies-115109.netlify.app/).
+
+## Details
+
+The package downloads a docx export of your Google Document.
+It converts it to Markdown using Pandoc, extracting images at the same time.
+Then it converts the Markdown document to an HTML divided into sections: each part started with a header level 1 is a section and will become a book chapter.
+Content that's before the first level 1 header is put into `index.qmd`.
+If there's no content before the first level 1 header, the first chapter is used as `index.qmd`.
