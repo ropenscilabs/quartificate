@@ -3,6 +3,14 @@
 #' @param gdoc_id ID of the Google Document.
 #' @param path A path, where to create the Quarto book. It will be created if needed.
 #' @param render Logical. Whether to render the resulting Quarto book.
+#' @param fix_lists Logical. Whether to try and fix lists, see Details.
+#'
+#' @details If your Google Document contains lists whose items span several lines,
+#' you might get better results with the `fix_lists` paremeter set to `TRUE`.
+#' The problem is that in Google Docs lists, from the second line lines in items
+#' have a small indentation. Pandoc tends to interpret this as a blockquote.
+#' We try to fix that with a hacky modification of lines which worked in our test
+#' cases but might botch something else for you. Please open an issue if that
 #'
 #' @return Nothing.
 #' @export
@@ -12,7 +20,7 @@
 #'   )$id
 #'  quarto_dir <- withr::local_tempdir()
 #'  quartificate::quartificate(id, quarto_dir, render = TRUE)
-quartificate <- function(gdoc_id, path, render = FALSE) {
+quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
   # download files from Google Drive ----
   from_gdoc <- withr::local_tempdir()
   fs::dir_create(from_gdoc)
@@ -45,6 +53,7 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
     file = file.path(from_gdoc, "gdoc.docx"),
     from = "docx",
     to = "gfm-raw_html",
+    args = "--wrap=none",
     output = file.path(path, "raw.md")
   )
 
@@ -54,6 +63,21 @@ quartificate <- function(gdoc_id, path, render = FALSE) {
   )
 
   # TODO Fix quotes in list ----
+  lines <- brio::read_lines(file.path(path, "raw.md"))
+  lines_starts <- purrr::map_chr(lines, ~substr(trimws(.x), 1, 1))
+  for (i in seq_along(lines)[-1]) {
+    # quote right after a list item
+    if (lines_starts[i] == ">" && lines_starts[i - 1] %in% c("-", "*")) {
+      lines[i] <- sub(">", "", trimws(lines[i]))
+    }
+    if (i > 2) {
+      if (lines_starts[i] == ">" && lines_starts[i - 1] == "" && lines_starts[i - 2] %in% c("-", "*")) {
+        lines[i - 2] <- paste(lines[i - 2], sub(">", "", trimws(lines[i])))
+        lines[i] <- ""
+      }
+    }
+  }
+  brio::write_lines(lines, file.path(path, "raw2.md"))
   # TODO Fix "smart" quotes (punctuation signs not block like above) ----
   # convert to HTML with sections ----
   out_temp_file <- withr::local_tempfile(fileext = ".html")
