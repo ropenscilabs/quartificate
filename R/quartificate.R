@@ -9,8 +9,8 @@
 #' you might get better results with the `fix_lists` paremeter set to `TRUE`.
 #' The problem is that in Google Docs lists, from the second line lines in items
 #' have a small indentation. Pandoc tends to interpret this as a blockquote.
-#' We try to fix that with a hacky modification of lines which worked in our test
-#' cases but might botch something else for you. Please open an issue if that
+#' We try to fix that by merging blockquotes in their previous sibling,
+#' when that previous sibling is a list item.
 #'
 #' @return Nothing.
 #' @export
@@ -31,54 +31,26 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
     path = file.path(from_gdoc, "gdoc.docx")
   )
 
-  temp_dir <- withr::local_tempdir()
-
-  withr::with_dir(temp_dir, {
-    googledrive::drive_download(
-      googledrive::as_id(gdoc_id),
-      type = "application/zip"
-    )
-  })
-  zip_file <- fs::dir_ls(temp_dir, glob = "*.zip")
-  utils::unzip(zip_file, exdir = temp_dir)
-  fs::dir_copy(file.path(temp_dir, "images"), file.path(from_gdoc, "images"))
-
   # Convert docx ----
 
   if (!fs::dir_exists(path)) {
     fs::dir_create(path)
   }
 
-  pandoc::pandoc_convert(
-    file = file.path(from_gdoc, "gdoc.docx"),
-    from = "docx",
-    to = "gfm-raw_html",
-    args = "--wrap=none",
-    output = file.path(path, "raw.md")
-  )
+  withr::with_dir(path, {
+    pandoc::pandoc_convert(
+      file = file.path(from_gdoc, "gdoc.docx"),
+      from = "docx",
+      to = "gfm-raw_html",
+      args = sprintf("--wrap=none  --extract-media %s", "images"),
+      output = "raw.md"
+    )
+  })
 
-  fs::dir_copy(
-    file.path(from_gdoc, "images"),
-    file.path(path, "media")
-  )
+  # meta ----
+  meta <- googledrive::drive_get(googledrive::as_id(gdoc_id))
+  title <- meta[["name"]]
 
-  # TODO Fix quotes in list ----
-  lines <- brio::read_lines(file.path(path, "raw.md"))
-  lines_starts <- purrr::map_chr(lines, ~substr(trimws(.x), 1, 1))
-  for (i in seq_along(lines)[-1]) {
-    # quote right after a list item
-    if (lines_starts[i] == ">" && lines_starts[i - 1] %in% c("-", "*")) {
-      lines[i] <- sub(">", "", trimws(lines[i]))
-    }
-    if (i > 2) {
-      if (lines_starts[i] == ">" && lines_starts[i - 1] == "" && lines_starts[i - 2] %in% c("-", "*")) {
-        lines[i - 2] <- paste(lines[i - 2], sub(">", "", trimws(lines[i])))
-        lines[i] <- ""
-      }
-    }
-  }
-  brio::write_lines(lines, file.path(path, "raw2.md"))
-  # TODO Fix "smart" quotes (punctuation signs not block like above) ----
   # convert to HTML with sections ----
   out_temp_file <- withr::local_tempfile(fileext = ".html")
   withr::with_dir(path, {
@@ -94,23 +66,49 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
       )
     )
   })
+  fs::file_delete(file.path(path, "raw.md"))
 
   html <- xml2::read_html(out_temp_file, encoding = "utf-8")
+
   sections <- xml2::xml_find_all(html, ".//section[@class='level1']")
-  ids <- purrr::map_chr(sections, treat_section, path = path)
+  ids <- purrr::map_chr(sections, treat_section, path = path, fix_lists)
 
-  # use first part as index.qmd
-  fs::file_move(
-    file.path(path, sprintf("%s.qmd", ids[1])),
-    file.path(path, "index.qmd")
-  )
+  # use first part as index.qmd if no preamble
+  kiddos <- xml2::xml_children(xml2::xml_child(html))
+  first_section <- min(which(xml2::xml_name(kiddos) == "section" & xml2::xml_attr(kiddos, "class") == "level1"))
+  no_preamble <- (first_section == 1)
+  if (no_preamble) {
+    fs::file_move(
+      file.path(path, sprintf("%s.qmd", ids[1])),
+      file.path(path, "index.qmd")
+    )
+    chapters <- sprintf("    - %s.qmd", c("index", ids[-1])) |> paste(collapse="\n")
+  } else {
+    preamble <- kiddos[seq_len(first_section - 1)]
+    temp_html <- withr::local_tempfile()
+    temp_md <- withr::local_tempfile()
+    brio::write_lines(as.character(preamble), temp_html)
+    pandoc::pandoc_convert(
+      file = temp_html,
+      from = "html",
+      to = "gfm",
+      output = temp_md
+    )
+    md_lines <- brio::read_lines(temp_md)
+    md_lines <- c(sprintf("# %s {.unnumbered}", title), "", md_lines)
+    brio::write_lines(md_lines, temp_md)
+    fs::file_move(
+      temp_md,
+      file.path(path, "index.qmd")
+    )
+    chapters <- sprintf("    - %s.qmd", c("index", ids)) |> paste(collapse="\n")
+  }
 
-  chapters <- sprintf("    - %s.qmd", c("index", ids[-1])) |> paste(collapse="\n")
+
 
   # prepare Quarto config ----
 
-  meta <- googledrive::drive_get(googledrive::as_id(gdoc_id))
-  title <- meta[["name"]]
+
   author <- meta[["drive_resource"]][[1]][["owners"]][[1]][["displayName"]]
   date <- as.character(Sys.Date())
   config_template <- system.file("quarto-config-template.yaml", package = "quartificate")
@@ -127,28 +125,13 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
   }
 }
 
-treat_section <- function(section, path) {
+treat_section <- function(section, path, fix_lists) {
   id <- xml2::xml_attr(section, "id")
-  lists <- xml2::xml_find_all(section, ".//li")
-  fix_list <- function(list) {
-    blockquotes <- xml2::xml_find_all(list, "blockquote")
-    fix_blockquote <- function(blockquote) {
-      parent <- xml2::xml_parent(blockquote)
-      contents <- xml2::xml_contents(blockquote)
-      purrr::walk(contents, ~xml2::xml_add_child(parent, .x))
-      xml2::xml_remove(blockquote)
-      # TODO rm stringr dep
-      xml2::xml_add_sibling(
-        parent, "li",
-        stringr::str_squish(xml2::xml_text(parent)),
-        .where = "after")
-      xml2::xml_remove(parent)
-    }
-    if (length(blockquotes) > 0) {
-      purrr::walk(blockquotes, fix_blockquote)
-    }
+  blockquotes <- xml2::xml_find_all(section, ".//blockquote")
+  if (fix_lists && length(blockquotes) > 0) {
+    purrr::walk(blockquotes, fix_blockquote)
   }
-  purrr::walk(lists, fix_list)
+
   temp_file <- withr::local_tempfile()
   xml2::write_html(section, temp_file)
   md_temp_file <- withr::local_tempfile()
@@ -160,4 +143,29 @@ treat_section <- function(section, path) {
   )
   fs::file_copy(md_temp_file, file.path(path, sprintf("%s.qmd", id)))
   return(id)
+}
+
+fix_blockquote <- function(blockquote) {
+
+  previous_siblings <- xml2::xml_find_all(blockquote, "preceding-sibling::*")
+  if (length(previous_siblings) == 0) {
+    return()
+  }
+  closest_sibling <- previous_siblings[length(previous_siblings)]
+
+  if (!xml2::xml_name(closest_sibling) %in% c("ul", "ol", "li")) {
+    return()
+  }
+
+  last_li <- if (xml2::xml_name(closest_sibling) %in% c("ul", "ol")) {
+    xml2::xml_children(closest_sibling)[length(xml2::xml_children(closest_sibling))]
+  } else {
+    closest_sibling
+  }
+  purrr::walk(
+    xml2::xml_contents(blockquote),
+    ~xml2::xml_add_child(last_li, .x, .where = "after")
+  )
+  xml2::xml_remove(blockquote)
+
 }
