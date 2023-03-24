@@ -31,7 +31,7 @@ when that previous sibling is a list item.
 }
 \examples{
 id <- googledrive::drive_find(
-    q = "name contains 'rOpenSci Champions Program Mentor Guidelines v1.0'"
+    q = "name contains 'My Example Document'"
   )$id
  quarto_dir <- withr::local_tempdir()
  quartificate::quartificate(id, quarto_dir, render = TRUE)
