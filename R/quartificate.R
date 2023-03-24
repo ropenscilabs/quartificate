@@ -6,7 +6,7 @@
 #' @param fix_lists Logical. Whether to try and fix lists, see Details.
 #'
 #' @details If your Google Document contains lists whose items span several lines,
-#' you might get better results with the `fix_lists` paremeter set to `TRUE`.
+#' you might get better results with the `fix_lists` parameter set to `TRUE`.
 #' The problem is that in Google Docs lists, from the second line lines in items
 #' have a small indentation. Pandoc tends to interpret this as a blockquote.
 #' We try to fix that by merging blockquotes in their previous sibling,
