@@ -21,7 +21,7 @@
 #'  quarto_dir <- withr::local_tempdir()
 #'  quartificate::quartificate(id, quarto_dir, render = TRUE)
 quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
-  # download files from Google Drive ----
+  # export docx from Google Drive ----
   from_gdoc <- withr::local_tempdir()
   fs::dir_create(from_gdoc)
 
@@ -104,11 +104,7 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
     chapters <- sprintf("    - %s.qmd", c("index", ids)) |> paste(collapse="\n")
   }
 
-
-
   # prepare Quarto config ----
-
-
   author <- meta[["drive_resource"]][[1]][["owners"]][[1]][["displayName"]]
   date <- as.character(Sys.Date())
   config_template <- system.file("quarto-config-template.yaml", package = "quartificate")
@@ -116,7 +112,6 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
     brio::read_lines(config_template) |> paste(collapse = "\n")
   ) |>
     brio::write_lines(file.path(path, "_quarto.yml"))
-  # TODO put preamble (anything before first highest level header) under a preamble header
 
   if (render) {
     withr::with_dir(path, {
