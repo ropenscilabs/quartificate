@@ -30,9 +30,11 @@ We try to fix that by merging blockquotes in their previous sibling,
 when that previous sibling is a list item.
 }
 \examples{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 id <- googledrive::drive_find(
     q = "name contains 'My Example Document'"
   )$id
  quarto_dir <- withr::local_tempdir()
  quartificate::quartificate(id, quarto_dir, render = TRUE)
+\dontshow{\}) # examplesIf}
 }

@@ -15,7 +15,8 @@
 #' @return Nothing.
 #' @export
 #'
-#' @examples id <- googledrive::drive_find(
+#' @examplesIf interactive()
+#' id <- googledrive::drive_find(
 #'     q = "name contains 'My Example Document'"
 #'   )$id
 #'  quarto_dir <- withr::local_tempdir()
@@ -56,11 +57,14 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
   withr::with_dir(path, {
     pandoc::pandoc_run(
       c(
-        "-t", "html", # output format
+        "-t",
+        "html", # output format
         "--wrap=preserve", # preserve soft linebreaks
         "--no-highlight",
-        "-f", "gfm-autolink_bare_uris", # input format, do not transform bare URIs into links
-        "-o", out_temp_file, # output temp file
+        "-f",
+        "gfm-autolink_bare_uris", # input format, do not transform bare URIs into links
+        "-o",
+        out_temp_file, # output temp file
         "raw.md",
         "--section-divs" # wrap sections into divs (for parsing)
       )
@@ -75,14 +79,18 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
 
   # use first part as index.qmd if no preamble
   kiddos <- xml2::xml_children(xml2::xml_child(html))
-  first_section <- min(which(xml2::xml_name(kiddos) == "section" & xml2::xml_attr(kiddos, "class") == "level1"))
+  first_section <- min(which(
+    xml2::xml_name(kiddos) == "section" &
+      xml2::xml_attr(kiddos, "class") == "level1"
+  ))
   no_preamble <- (first_section == 1)
   if (no_preamble) {
     fs::file_move(
       file.path(path, sprintf("%s.qmd", ids[1])),
       file.path(path, "index.qmd")
     )
-    chapters <- sprintf("    - %s.qmd", c("index", ids[-1])) |> paste(collapse="\n")
+    chapters <- sprintf("    - %s.qmd", c("index", ids[-1])) |>
+      paste(collapse = "\n")
   } else {
     preamble <- kiddos[seq_len(first_section - 1)]
     temp_html <- withr::local_tempfile()
@@ -101,13 +109,17 @@ quartificate <- function(gdoc_id, path, render = FALSE, fix_lists = FALSE) {
       temp_md,
       file.path(path, "index.qmd")
     )
-    chapters <- sprintf("    - %s.qmd", c("index", ids)) |> paste(collapse="\n")
+    chapters <- sprintf("    - %s.qmd", c("index", ids)) |>
+      paste(collapse = "\n")
   }
 
   # prepare Quarto config ----
   author <- meta[["drive_resource"]][[1]][["owners"]][[1]][["displayName"]]
   date <- as.character(Sys.Date())
-  config_template <- system.file("quarto-config-template.yaml", package = "quartificate")
+  config_template <- system.file(
+    "quarto-config-template.yaml",
+    package = "quartificate"
+  )
   whisker::whisker.render(
     brio::read_lines(config_template) |> paste(collapse = "\n")
   ) |>
@@ -141,7 +153,6 @@ treat_section <- function(section, path, fix_lists) {
 }
 
 fix_blockquote <- function(blockquote) {
-
   previous_siblings <- xml2::xml_find_all(blockquote, "preceding-sibling::*")
   if (length(previous_siblings) == 0) {
     return()
@@ -153,14 +164,15 @@ fix_blockquote <- function(blockquote) {
   }
 
   last_li <- if (xml2::xml_name(closest_sibling) %in% c("ul", "ol")) {
-    xml2::xml_children(closest_sibling)[length(xml2::xml_children(closest_sibling))]
+    xml2::xml_children(closest_sibling)[length(xml2::xml_children(
+      closest_sibling
+    ))]
   } else {
     closest_sibling
   }
   purrr::walk(
     xml2::xml_contents(blockquote),
-    ~xml2::xml_add_child(last_li, .x, .where = "after")
+    ~ xml2::xml_add_child(last_li, .x, .where = "after")
   )
   xml2::xml_remove(blockquote)
-
 }
